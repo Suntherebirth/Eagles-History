@@ -32,7 +32,15 @@
         .output-box-container { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
         .output-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 2px solid #edf2f7; padding-bottom: 5px; }
         .output-header span { font-weight: bold; color: var(--dark-color); }
-        .output-content { white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px; min-height: 40px; color: #1a202c; line-height: 1.7; }
+        .output-header small { color: #ff6600; font-weight: normal; margin-left: 10px; }
+
+        /* 수정 가능 모드 스타일 */
+        .output-content { 
+            white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px; 
+            min-height: 40px; color: #1a202c; line-height: 1.7; outline: none; padding: 5px; border-radius: 4px; transition: 0.3s;
+        }
+        .output-content:hover { background: #fffaf5; box-shadow: inset 0 0 0 1px #ffd8a8; cursor: text; }
+        .output-content:focus { background: #fffaf5; box-shadow: inset 0 0 0 1px #ff6600; }
         
         .manual-input { display: flex; gap: 8px; margin-top: 10px; }
         .manual-input input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
@@ -67,16 +75,16 @@
 
     <div class="output-section">
         <div class="output-box-container">
-            <div class="output-header"><span>[타자 성적]</span><button class="btn-clear" onclick="clearBox('hitterResult')">비우기</button></div>
-            <div id="hitterResult" class="output-content"></div>
+            <div class="output-header"><span>[타자 성적] <small>*클릭하여 수정 가능</small></span><button class="btn-clear" onclick="clearBox('hitterResult')">비우기</button></div>
+            <div id="hitterResult" class="output-content" contenteditable="true" spellcheck="false"></div>
         </div>
         <div class="output-box-container">
-            <div class="output-header"><span>[투수 성적]</span><button class="btn-clear" onclick="clearBox('pitcherResult')">비우기</button></div>
-            <div id="pitcherResult" class="output-content"></div>
+            <div class="output-header"><span>[투수 성적] <small>*클릭하여 수정 가능</small></span><button class="btn-clear" onclick="clearBox('pitcherResult')">비우기</button></div>
+            <div id="pitcherResult" class="output-content" contenteditable="true" spellcheck="false"></div>
         </div>
         <div class="output-box-container">
-            <div class="output-header"><span>[수비 및 주루 특이사항]</span><button class="btn-clear" onclick="clearBox('defenseResult')">비우기</button></div>
-            <div id="defenseResult" class="output-content"></div>
+            <div class="output-header"><span>[수비 및 주루 특이사항] <small>*클릭하여 수정 가능</small></span><button class="btn-clear" onclick="clearBox('defenseResult')">비우기</button></div>
+            <div id="defenseResult" class="output-content" contenteditable="true" spellcheck="false"></div>
         </div>
     </div>
 
@@ -88,6 +96,26 @@
         }
 
         function clearBox(id) { document.getElementById(id).innerText = ""; }
+
+        // 야구식 이닝 변환 함수
+        function formatInning(ip) {
+            if (!ip) return "0.0";
+            let val = parseFloat(ip);
+            if (isNaN(val)) return ip;
+            
+            // 소수점 셋째자리에서 반올림 (부동소수점 오류 방지)
+            val = Math.round(val * 100) / 100;
+            
+            let integerPart = Math.floor(val);
+            let decimalPart = val - integerPart;
+
+            // 게임원 등에서 1/3은 .33, 2/3은 .66 혹은 .67로 표기됨
+            if (decimalPart >= 0.3 && decimalPart < 0.4) return integerPart + ".1";
+            if (decimalPart >= 0.6 && decimalPart < 0.7) return integerPart + ".2";
+            
+            // 정수일 경우 .0 추가
+            return integerPart + ".0";
+        }
 
         function processHitter() {
             const input = document.getElementById('rawData').value;
@@ -108,7 +136,6 @@
                     const sb = cells[cells.length - 3];
                     const bbCount = (line.match(/4구|사구/g) || []).length;
                     
-                    // 상세 타격 결과 파싱 (1~9회 칸 추출)
                     let details = [];
                     for(let i=1; i<=9; i++) {
                         if(cells[i] && isNaN(cells[i]) && cells[i] !== "합") {
@@ -117,14 +144,14 @@
                     }
                     const detailStr = details.length > 0 ? ` (${details.join(', ')})` : "";
 
-                    if (isPractice) {
-                        currentText += `${name}: ${ab}타수 ${h}안타 ${bbCount}사사구${detailStr}\n`;
-                    } else {
-                        currentText += `${name}: ${ab}타수 ${h}안타 ${bbCount}사사구 ${rbi}타점 ${run}득점 ${sb}도루${detailStr}\n`;
-                    }
+                    let lineResult = isPractice 
+                        ? `${name}: ${ab}타수 ${h}안타 ${bbCount}사사구${detailStr}`
+                        : `${name}: ${ab}타수 ${h}안타 ${bbCount}사사구 ${rbi}타점 ${run}득점 ${sb}도루${detailStr}`;
+                    
+                    currentText = (currentText ? currentText + "\n" : "") + lineResult;
                 }
             });
-            document.getElementById('hitterResult').innerText = currentText.trim();
+            document.getElementById('hitterResult').innerText = currentText;
             document.getElementById('rawData').value = "";
         }
 
@@ -139,20 +166,23 @@
                 if (!trimmed || trimmed.includes('선수') || trimmed.includes('방어율')) return;
                 const cells = trimmed.split(/\s+/);
                 if (cells.length >= 15) {
-                    const name = cells[0].split('(')[0].trim();
-                    const ip = cells[2];
+                    const rawName = cells[0].split('(')[0].trim();
+                    const resultTag = cells[1]; // 승, 패, 세 등 결과
+                    const nameWithTag = (resultTag !== "-" && resultTag !== "") ? `${rawName}(${resultTag})` : rawName;
+
+                    const ip = formatInning(cells[2]); // 이닝 변환 적용
                     const bb = cells[9], hbp = cells[10], so = cells[11];
                     const r = cells[14], er = cells[15];
                     const totalBB = Number(bb) + Number(hbp);
 
-                    if (isPractice) {
-                        currentText += `${name}: ${ip}이닝 ${so}탈삼진 ${totalBB}사사구\n`;
-                    } else {
-                        currentText += `${name}: ${ip}이닝 ${r}실점(${er}자책) ${so}탈삼진 ${totalBB}사사구\n`;
-                    }
+                    let lineResult = isPractice
+                        ? `${nameWithTag}: ${ip}이닝 ${so}탈삼진 ${totalBB}사사구`
+                        : `${nameWithTag}: ${ip}이닝 ${r}실점(${er}자책) ${so}탈삼진 ${totalBB}사사구`;
+
+                    currentText = (currentText ? currentText + "\n" : "") + lineResult;
                 }
             });
-            document.getElementById('pitcherResult').innerText = currentText.trim();
+            document.getElementById('pitcherResult').innerText = currentText;
             document.getElementById('rawData').value = "";
         }
 
@@ -170,7 +200,13 @@
             const d = document.getElementById('defenseResult').innerText;
             const mode = document.getElementById('practiceMode').checked ? "[청백전 모드]" : "[정식 경기 모드]";
             const combined = `${mode}\n\n[타자 성적]\n${h}\n\n[투수 성적]\n${p}\n\n[수비/주루 특이사항]\n${d}`;
-            navigator.clipboard.writeText(combined).then(() => { alert("Gemini용 데이터가 복사되었습니다."); });
+            
+            navigator.clipboard.writeText(combined).then(() => {
+                const btn = document.querySelector('.btn-copy-all');
+                const originalText = btn.innerText;
+                btn.innerText = "✅ 복사 완료!";
+                setTimeout(() => { btn.innerText = originalText; }, 1500);
+            });
         }
     </script>
 </body>
