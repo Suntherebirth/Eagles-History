@@ -88,7 +88,6 @@
     </div>
 
     <script>
-        // 포지션 약어를 풀네임으로 변환
         const posMap = {
             '중': '중견수', '포': '포수', '좌': '좌익수', '우': '우익수',
             '一': '1루수', '1': '1루수', '二': '2루수', '2': '2루수', 
@@ -97,23 +96,16 @@
         };
 
         function parseHitterInfo(str) {
-            // 괄호 제거
             let cleanStr = str.replace(/\(.*\)/g, "");
-            // 앞부분 숫자(타순) 추출
             const orderMatch = cleanStr.match(/^[0-9]+/);
             const order = orderMatch ? orderMatch[0] + "번타자 " : "";
-            
-            // 포지션 추출 (숫자 다음부터 이름 전까지)
             let posRaw = cleanStr.replace(/^[0-9]+/g, "").match(/^[중포一좌우二三유지내외123]+/);
             let pos = "";
             if (posRaw) {
                 pos = posMap[posRaw[0].charAt(0)] || posRaw[0];
                 pos += " ";
             }
-            
-            // 이름 추출 (숫자와 포지션 문자 제거)
             const name = cleanStr.replace(/^[0-9]+[중포一좌우二三유지내외123]+/g, "").trim();
-            
             return `${order}${pos}${name}`;
         }
 
@@ -157,19 +149,14 @@
                     const run = cells[cells.length - 4];
                     const sb = cells[cells.length - 3];
                     const bbCount = (line.match(/4구|사구/g) || []).length;
-                    
                     let details = [];
                     for(let i=1; i<=9; i++) {
-                        if(cells[i] && isNaN(cells[i]) && cells[i] !== "합") {
-                            details.push(cells[i]);
-                        }
+                        if(cells[i] && isNaN(cells[i]) && cells[i] !== "합") details.push(cells[i]);
                     }
                     const detailStr = details.length > 0 ? ` (${details.join(', ')})` : "";
-
                     let lineResult = isPractice 
                         ? `${fullInfo}: ${ab}타수 ${h}안타 ${bbCount}사사구${detailStr}`
                         : `${fullInfo}: ${ab}타수 ${h}안타 ${bbCount}사사구 ${rbi}타점 ${run}득점 ${sb}도루${detailStr}`;
-                    
                     currentText = (currentText ? currentText + "\n" : "") + lineResult;
                 }
             });
@@ -192,13 +179,18 @@
                     const resultTag = cells[1]; 
                     const resultWord = formatResult(resultTag);
                     const ip = formatInning(cells[2]);
+                    
+                    const h = cells[5]; // 피안타
+                    const hr = cells[6]; // 피홈런
+                    const hrStr = (Number(hr) > 0) ? `(${hr}피홈런)` : "";
+                    
                     const bb = cells[9], hbp = cells[10], so = cells[11];
                     const r = cells[14], er = cells[15];
                     const totalBB = Number(bb) + Number(hbp);
 
                     let lineResult = isPractice
-                        ? `${name}: ${ip}이닝 ${so}탈삼진 ${totalBB}사사구${resultWord}`
-                        : `${name}: ${ip}이닝 ${r}실점(${er}자책) ${so}탈삼진 ${totalBB}사사구${resultWord}`;
+                        ? `${name}: ${ip}이닝 ${h}피안타${hrStr} ${so}탈삼진 ${totalBB}사사구${resultWord}`
+                        : `${name}: ${ip}이닝 ${r}실점(${er}자책) ${h}피안타${hrStr} ${so}탈삼진 ${totalBB}사사구${resultWord}`;
 
                     currentText = (currentText ? currentText + "\n" : "") + lineResult;
                 }
@@ -221,7 +213,6 @@
             const d = document.getElementById('defenseResult').innerText;
             const mode = document.getElementById('practiceMode').checked ? "[청백전 모드]" : "[정식 경기 모드]";
             const combined = `${mode}\n\n[타자 성적]\n${h}\n\n[투수 성적]\n${p}\n\n[수비/주루 특이사항]\n${d}`;
-            
             navigator.clipboard.writeText(combined).then(() => {
                 const btn = document.querySelector('.btn-copy-all');
                 btn.innerText = "✅ 복사 완료!";
