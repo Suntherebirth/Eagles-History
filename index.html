@@ -26,6 +26,7 @@
         .output-section { display: grid; grid-template-columns: 1fr; gap: 15px; }
         .output-box-container { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
         .output-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 2px solid #edf2f7; padding-bottom: 5px; }
+        .output-header span { font-weight: bold; color: var(--dark-color); }
         .output-content { white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px; min-height: 40px; color: #1a202c; line-height: 1.7; outline: none; padding: 5px; border-radius: 4px; }
         .output-content:hover { background: #fffaf5; box-shadow: inset 0 0 0 1px #ffd8a8; cursor: text; }
         .manual-input { display: flex; gap: 8px; margin-top: 10px; }
@@ -38,7 +39,7 @@
 
     <div class="mode-selector">
         <span class="mode-label">정식 경기</span>
-        <label class="switch"><input type="checkbox" id="practiceMode"><span class="slider"></span></label>
+        <label class="switch"><input type="checkbox" id="practiceMode" onchange="saveData('mode', this.checked)"><span class="slider"></span></label>
         <span class="mode-label" style="color: var(--main-color);">청백전 모드</span>
     </div>
 
@@ -59,20 +60,38 @@
     <div class="output-section">
         <div class="output-box-container">
             <div class="output-header"><span>[타자 성적]</span><button class="btn-clear" onclick="clearBox('hitterResult')">비우기</button></div>
-            <div id="hitterResult" class="output-content" contenteditable="true" spellcheck="false"></div>
+            <div id="hitterResult" class="output-content" contenteditable="true" oninput="saveData('hitter', this.innerText)" spellcheck="false"></div>
         </div>
         <div class="output-box-container">
             <div class="output-header"><span>[투수 성적]</span><button class="btn-clear" onclick="clearBox('pitcherResult')">비우기</button></div>
-            <div id="pitcherResult" class="output-content" contenteditable="true" spellcheck="false"></div>
+            <div id="pitcherResult" class="output-content" contenteditable="true" oninput="saveData('pitcher', this.innerText)" spellcheck="false"></div>
         </div>
         <div class="output-box-container">
             <div class="output-header"><span>[수비 및 주루 특이사항]</span><button class="btn-clear" onclick="clearBox('defenseResult')">비우기</button></div>
-            <div id="defenseResult" class="output-content" contenteditable="true" spellcheck="false"></div>
+            <div id="defenseResult" class="output-content" contenteditable="true" oninput="saveData('defense', this.innerText)" spellcheck="false"></div>
         </div>
     </div>
 
     <script>
         const posMap = {'중': '중견수', '포': '포수', '좌': '좌익수', '우': '우익수', '一': '1루수', '1': '1루수', '二': '2루수', '2': '2루수', '三': '3루수', '3': '3루수', '유': '유격수', '지': '지명타자', '내': '내야수', '외': '외야수'};
+
+        // 페이지 로드 시 데이터 복원
+        window.onload = function() {
+            if(localStorage.getItem('eagles_hitter')) document.getElementById('hitterResult').innerText = localStorage.getItem('eagles_hitter');
+            if(localStorage.getItem('eagles_pitcher')) document.getElementById('pitcherResult').innerText = localStorage.getItem('eagles_pitcher');
+            if(localStorage.getItem('eagles_defense')) document.getElementById('defenseResult').innerText = localStorage.getItem('eagles_defense');
+            if(localStorage.getItem('eagles_mode') === 'true') document.getElementById('practiceMode').checked = true;
+        }
+
+        // 로컬 스토리지 저장 함수
+        function saveData(type, content) {
+            localStorage.setItem('eagles_' + type, content);
+        }
+
+        function clearBox(id) {
+            document.getElementById(id).innerText = "";
+            saveData(id.replace('Result', ''), "");
+        }
 
         function parseHitterInfo(str) {
             let cleanStr = str.replace(/\(.*\)/g, "");
@@ -84,8 +103,6 @@
             return `${order}${pos}${name}`;
         }
 
-        function clearBox(id) { document.getElementById(id).innerText = ""; }
-
         function processPitcher() {
             const input = document.getElementById('rawData').value;
             const isPractice = document.getElementById('practiceMode').checked;
@@ -95,40 +112,24 @@
             lines.forEach(line => {
                 const trimmed = line.trim();
                 if (!trimmed || trimmed.includes('선수') || trimmed.includes('방어율')) return;
-                
-                // 공백으로 나누되, 분수(⅓, ⅔)가 단독 칸으로 떨어지는 경우를 대비해 필터링
                 let cells = trimmed.split(/\s+/).filter(c => c !== "");
-                
                 if (cells.length >= 10) {
                     const name = cells[0].split('(')[0].trim();
                     const resultTag = cells[1];
                     const resultWord = {"승": " 승리", "패": " 패배", "세": " 세이브", "홀": " 홀드"}[resultTag] || "";
-                    
-                    let ip = "0.0";
-                    let dataIdx = 3; // 기본 데이터 시작 인덱스
-
-                    // 이닝 처리 로직
+                    let ip = "0.0"; let dataIdx = 3;
                     let mainInning = cells[2];
                     if (cells[3] === "⅓" || cells[3] === "⅔") {
-                        // 2 ⅔ 형태 (공백으로 분리됨)
                         ip = mainInning + (cells[3] === "⅓" ? ".1" : ".2");
                         dataIdx = 4; 
                     } else if (mainInning.includes("⅓") || mainInning.includes("⅔")) {
-                        // 2⅔ 형태 (붙어있음)
                         ip = mainInning.replace("⅓", ".1").replace("⅔", ".2");
                         dataIdx = 3;
                     } else {
-                        // 정수 형태
-                        ip = mainInning + ".0";
-                        dataIdx = 3;
+                        ip = mainInning + ".0"; dataIdx = 3;
                     }
-
-                    // 인덱스 보정: 타자/타수 건너뛰고 피안타(dataIdx+2), 피홈런(dataIdx+3)
-                    // 순서: [0:이름] [1:결과] [2:이닝] ([3:분수]) [타자] [타수] [피안타] [피홈런] ... [볼넷] [사구] [삼진] ... [실점] [자책]
-                    const h = cells[dataIdx + 2];
-                    const hr = cells[dataIdx + 3];
+                    const h = cells[dataIdx + 2], hr = cells[dataIdx + 3];
                     const hrStr = (Number(hr) > 0) ? `(${hr}피홈런)` : "";
-                    
                     const bb = cells[dataIdx + 6], hbp = cells[dataIdx + 7], so = cells[dataIdx + 8];
                     const r = cells[dataIdx + 11], er = cells[dataIdx + 12];
                     const totalBB = Number(bb) + Number(hbp);
@@ -136,11 +137,11 @@
                     let lineResult = isPractice
                         ? `${name}: ${ip}이닝 ${h}피안타${hrStr} ${so}탈삼진 ${totalBB}사사구${resultWord}`
                         : `${name}: ${ip}이닝 ${r}실점(${er}자책) ${h}피안타${hrStr} ${so}탈삼진 ${totalBB}사사구${resultWord}`;
-
                     currentText = (currentText ? currentText + "\n" : "") + lineResult;
                 }
             });
             document.getElementById('pitcherResult').innerText = currentText;
+            saveData('pitcher', currentText);
             document.getElementById('rawData').value = "";
         }
 
@@ -166,6 +167,7 @@
                 }
             });
             document.getElementById('hitterResult').innerText = currentText;
+            saveData('hitter', currentText);
             document.getElementById('rawData').value = "";
         }
 
@@ -173,7 +175,9 @@
             const input = document.getElementById('defenseInput');
             if (!input.value.trim()) return;
             const currentText = document.getElementById('defenseResult').innerText;
-            document.getElementById('defenseResult').innerText = (currentText ? currentText + "\n" : "") + "- " + input.value;
+            const newContent = (currentText ? currentText + "\n" : "") + "- " + input.value;
+            document.getElementById('defenseResult').innerText = newContent;
+            saveData('defense', newContent);
             input.value = "";
         }
 
