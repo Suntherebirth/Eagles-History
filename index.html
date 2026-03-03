@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>야구 기록지 변환기</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; padding: 20px; line-height: 1.6; max-width: 800px; margin: 0 auto; background: #f0f2f5; color: #333; }
+        h1 { color: #072f5f; text-align: center; border-bottom: 3px solid #072f5f; padding-bottom: 10px; }
+        .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        p { font-weight: bold; margin-bottom: 8px; }
+        textarea { width: 100%; height: 200px; border: 1px solid #ddd; border-radius: 8px; padding: 12px; box-sizing: border-box; font-family: monospace; font-size: 14px; resize: vertical; }
+        .btn-group { display: flex; gap: 10px; margin: 15px 0; }
+        button { flex: 1; padding: 15px; cursor: pointer; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; transition: 0.2s; color: white; }
+        .btn-hitter { background: #e74c3c; }
+        .btn-pitcher { background: #3498db; }
+        button:hover { opacity: 0.8; transform: translateY(-1px); }
+        .result-box { margin-top: 20px; position: relative; }
+        #result { background: #f8f9fa; padding: 15px; border: 2px dashed #cbd5e0; border-radius: 8px; min-height: 100px; white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 15px; }
+        .copy-hint { font-size: 12px; color: #666; margin-top: 5px; text-align: right; }
+    </style>
+</head>
+<body>
+
+    <h1>⚾ Online Scoreboard Converter</h1>
+    
+    <div class="container">
+        <p>게임원 기록실 데이터를 붙여넣으세요 (팀 전체)</p>
+        <textarea id="rawData" placeholder="선수 명단부터 합계 전까지 혹은 투수 기록 전체를 복사해 붙여넣으세요."></textarea>
+        
+        <div class="btn-group">
+            <button class="btn-hitter" onclick="processHitter()">타자 명단 변환</button>
+            <button class="btn-pitcher" onclick="processPitcher()">투수 명단 변환</button>
+        </div>
+
+        <div class="result-box">
+            <p>📋 변환 결과</p>
+            <div id="result">기록을 입력하고 버튼을 누르면 양식에 맞춰 출력됩니다.</div>
+            <div class="copy-hint">드래그하여 복사해서 사용하세요.</div>
+        </div>
+    </div>
+
+    <script>
+        // 이름에서 번호, 포지션, 특수문자 제거하는 함수
+        function cleanName(str) {
+            // 정규식 설명: 숫자, 특정 한자(포지션), 영문, 특수기호 제거
+            return str.replace(/[0-9]|중|포|一|좌|우|二|三|유|지|내|외|\(|\)/g, "").trim();
+        }
+
+        // 타자 성적 처리
+        function processHitter() {
+            const input = document.getElementById('rawData').value;
+            const lines = input.split('\n');
+            let results = [];
+
+            lines.forEach(line => {
+                if (!line.trim() || line.includes('선수') || line.includes('합 계')) return;
+
+                const cells = line.trim().split(/\s+/);
+                if (cells.length >= 7) {
+                    const rawName = cells[0];
+                    const name = cleanName(rawName.split('(')[0]);
+                    
+                    // 뒤에서부터 역순 인덱싱 (가변적인 타석 대응)
+                    const ab = cells[cells.length - 7];   // 타수
+                    const h = cells[cells.length - 6];    // 안타
+                    const rbi = cells[cells.length - 5];  // 타점
+                    const run = cells[cells.length - 4];  // 득점
+                    const sb = cells[cells.length - 3];   // 도루
+                    
+                    // 사사구 계산: 해당 줄에서 4구 또는 사구 단어 개수 추출
+                    const bbCount = (line.match(/4구|사구/g) || []).length;
+
+                    results.push(`${name}: ${ab}타수 ${h}안타 ${bbCount}사사구 ${rbi}타점 ${run}득점 ${sb}도루`);
+                }
+            });
+
+            document.getElementById('result').innerText = results.length > 0 ? results.join('\n') : "변환할 타자 데이터가 없습니다.";
+        }
+
+        // 투수 성적 처리
+        function processPitcher() {
+            const input = document.getElementById('rawData').value;
+            const lines = input.split('\n');
+            let results = [];
+
+            lines.forEach(line => {
+                if (!line.trim() || line.includes('선수') || line.includes('방어율')) return;
+
+                const cells = line.trim().split(/\s+/);
+                if (cells.length >= 15) {
+                    const name = cells[0].split('(')[0]; // 이름(등번호)에서 이름만
+                    const ip = cells[2];    // 이닝
+                    const bb = cells[9];    // 볼넷
+                    const hbp = cells[10];  // 사구
+                    const so = cells[11];   // 삼진
+                    const r = cells[14];    // 실점
+                    const er = cells[15];   // 자책점
+                    
+                    const totalBB = Number(bb) + Number(hbp);
+
+                    results.push(`${name}: ${ip}이닝 ${r}실점(${er}자책) ${so}탈삼진 ${totalBB}사사구`);
+                }
+            });
+
+            document.getElementById('result').innerText = results.length > 0 ? results.join('\n') : "변환할 투수 데이터가 없습니다.";
+        }
+    </script>
+</body>
+</html>
