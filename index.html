@@ -34,7 +34,6 @@
         .output-header span { font-weight: bold; color: var(--dark-color); }
         .output-header small { color: #ff6600; font-weight: normal; margin-left: 10px; }
 
-        /* 수정 가능 모드 스타일 */
         .output-content { 
             white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 14px; 
             min-height: 40px; color: #1a202c; line-height: 1.7; outline: none; padding: 5px; border-radius: 4px; transition: 0.3s;
@@ -89,32 +88,55 @@
     </div>
 
     <script>
-        function cleanName(str) {
-            let name = str.replace(/\(.*\)/g, "");
-            name = name.replace(/^[0-9]+[중포一좌우二三유지내외]+/g, "");
-            return name.trim();
+        // 포지션 약어를 풀네임으로 변환
+        const posMap = {
+            '중': '중견수', '포': '포수', '좌': '좌익수', '우': '우익수',
+            '一': '1루수', '1': '1루수', '二': '2루수', '2': '2루수', 
+            '三': '3루수', '3': '3루수', '유': '유격수', '지': '지명타자',
+            '내': '내야수', '외': '외야수'
+        };
+
+        function parseHitterInfo(str) {
+            // 괄호 제거
+            let cleanStr = str.replace(/\(.*\)/g, "");
+            // 앞부분 숫자(타순) 추출
+            const orderMatch = cleanStr.match(/^[0-9]+/);
+            const order = orderMatch ? orderMatch[0] + "번타자 " : "";
+            
+            // 포지션 추출 (숫자 다음부터 이름 전까지)
+            let posRaw = cleanStr.replace(/^[0-9]+/g, "").match(/^[중포一좌우二三유지내외123]+/);
+            let pos = "";
+            if (posRaw) {
+                pos = posMap[posRaw[0].charAt(0)] || posRaw[0];
+                pos += " ";
+            }
+            
+            // 이름 추출 (숫자와 포지션 문자 제거)
+            const name = cleanStr.replace(/^[0-9]+[중포一좌우二三유지내외123]+/g, "").trim();
+            
+            return `${order}${pos}${name}`;
         }
 
         function clearBox(id) { document.getElementById(id).innerText = ""; }
 
-        // 야구식 이닝 변환 함수
         function formatInning(ip) {
             if (!ip) return "0.0";
             let val = parseFloat(ip);
             if (isNaN(val)) return ip;
-            
-            // 소수점 셋째자리에서 반올림 (부동소수점 오류 방지)
             val = Math.round(val * 100) / 100;
-            
             let integerPart = Math.floor(val);
             let decimalPart = val - integerPart;
-
-            // 게임원 등에서 1/3은 .33, 2/3은 .66 혹은 .67로 표기됨
             if (decimalPart >= 0.3 && decimalPart < 0.4) return integerPart + ".1";
             if (decimalPart >= 0.6 && decimalPart < 0.7) return integerPart + ".2";
-            
-            // 정수일 경우 .0 추가
             return integerPart + ".0";
+        }
+
+        function formatResult(tag) {
+            if (tag === "승") return " 승리";
+            if (tag === "패") return " 패배";
+            if (tag === "세") return " 세이브";
+            if (tag === "홀") return " 홀드";
+            return "";
         }
 
         function processHitter() {
@@ -128,7 +150,7 @@
                 if (!trimmed || trimmed.includes('선수') || trimmed.includes('합 계')) return;
                 const cells = trimmed.split(/\s+/);
                 if (cells.length >= 10) {
-                    const name = cleanName(cells[0]);
+                    const fullInfo = parseHitterInfo(cells[0]);
                     const ab = cells[cells.length - 7];
                     const h = cells[cells.length - 6];
                     const rbi = cells[cells.length - 5];
@@ -145,8 +167,8 @@
                     const detailStr = details.length > 0 ? ` (${details.join(', ')})` : "";
 
                     let lineResult = isPractice 
-                        ? `${name}: ${ab}타수 ${h}안타 ${bbCount}사사구${detailStr}`
-                        : `${name}: ${ab}타수 ${h}안타 ${bbCount}사사구 ${rbi}타점 ${run}득점 ${sb}도루${detailStr}`;
+                        ? `${fullInfo}: ${ab}타수 ${h}안타 ${bbCount}사사구${detailStr}`
+                        : `${fullInfo}: ${ab}타수 ${h}안타 ${bbCount}사사구 ${rbi}타점 ${run}득점 ${sb}도루${detailStr}`;
                     
                     currentText = (currentText ? currentText + "\n" : "") + lineResult;
                 }
@@ -166,18 +188,17 @@
                 if (!trimmed || trimmed.includes('선수') || trimmed.includes('방어율')) return;
                 const cells = trimmed.split(/\s+/);
                 if (cells.length >= 15) {
-                    const rawName = cells[0].split('(')[0].trim();
-                    const resultTag = cells[1]; // 승, 패, 세 등 결과
-                    const nameWithTag = (resultTag !== "-" && resultTag !== "") ? `${rawName}(${resultTag})` : rawName;
-
-                    const ip = formatInning(cells[2]); // 이닝 변환 적용
+                    const name = cells[0].split('(')[0].trim();
+                    const resultTag = cells[1]; 
+                    const resultWord = formatResult(resultTag);
+                    const ip = formatInning(cells[2]);
                     const bb = cells[9], hbp = cells[10], so = cells[11];
                     const r = cells[14], er = cells[15];
                     const totalBB = Number(bb) + Number(hbp);
 
                     let lineResult = isPractice
-                        ? `${nameWithTag}: ${ip}이닝 ${so}탈삼진 ${totalBB}사사구`
-                        : `${nameWithTag}: ${ip}이닝 ${r}실점(${er}자책) ${so}탈삼진 ${totalBB}사사구`;
+                        ? `${name}: ${ip}이닝 ${so}탈삼진 ${totalBB}사사구${resultWord}`
+                        : `${name}: ${ip}이닝 ${r}실점(${er}자책) ${so}탈삼진 ${totalBB}사사구${resultWord}`;
 
                     currentText = (currentText ? currentText + "\n" : "") + lineResult;
                 }
@@ -203,9 +224,8 @@
             
             navigator.clipboard.writeText(combined).then(() => {
                 const btn = document.querySelector('.btn-copy-all');
-                const originalText = btn.innerText;
                 btn.innerText = "✅ 복사 완료!";
-                setTimeout(() => { btn.innerText = originalText; }, 1500);
+                setTimeout(() => { btn.innerText = "📋 전체 내용 복사 (Gemini용)"; }, 1500);
             });
         }
     </script>
